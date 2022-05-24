@@ -8,11 +8,11 @@ This package accompanies the paper
 
 AUTHOR:
 
-- Armin Straub (2021-10): Initial implementation
+- Armin Straub (2021/10): Initial implementation
 
 CONTRIBUTIONS:
 
-- The underlying ideas and algorithms for computing congruence schemes where
+- The underlying ideas and algorithms for computing congruence schemes were
   first described by Eric Rowland and Reem Yassawi ("Automatic congruences for
   diagonals of rational functions") and extended by Eric Rowland and Doron
   Zeilberger ("A case study in meta-automation: automatic generation of
