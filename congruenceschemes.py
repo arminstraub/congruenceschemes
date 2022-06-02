@@ -1012,7 +1012,7 @@ class SequenceLinearScheme:
         The transitions defining the scheme are returned in the form [t_1,
         t_2, ...] where t_i is a list (with p elements) containing the linear
         combinations of states that the i-th state transitions to for input
-        0,1,...,p.
+        0,1,...,p-1.
         
         EXAMPLES::
         
@@ -1217,9 +1217,13 @@ class SequenceLinearScheme:
             S = S.simplify()
         return S
 
-    def nth_term(self, n):
+    def nth_term(self, n, initial_state=None):
         r"""
         Compute n-th term of the sequence.
+
+        The optional parameter initial_state can be used to select a different
+        initial state: for instance, using initial_state = {m: 1} we can
+        compute terms of the m-th state.
 
         EXAMPLES::
 
@@ -1228,18 +1232,31 @@ class SequenceLinearScheme:
             sage: S = SequenceLinearScheme([[0, 1], [1, 0]], [0, 1])
             sage: [S.nth_term(n) for n in [0..20]]
             [0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0]
+
+        The Catalan numbers modulo 5::
+
+            sage: R.<x> = LaurentPolynomialRing(Zmod(5))
+            sage: S = CongruenceScheme(1/x+2+x, 1-x)
+            sage: S.states()
+            [CT[(x + 2 + x^-1)^n * (-x + 1)], CT[(x + 2 + x^-1)^n * (x)]]
+            sage: [S.nth_term(n, {1: 1}) for n in [0..10]]
+            [0, 1, 4, 0, 1, 0, 2, 3, 0, 3, 0]
+            sage: set([S.nth_term(n, {1: 1}) == binomial(2*n,n) - catalan_number(n) for n in [0..100]])
+            {True}
         """
         p = self.input_base()
-        state_comb = self.initial_state()
+        state_comb = initial_state
+        if not state_comb:
+            state_comb = self.initial_state()
         while n > 0:
             digit = n % p
             n = n // p
             state_comb = self.transition(state_comb, digit)
         return self.initial_cond(state_comb)
 
-    def terms(self, n):
+    def terms(self, n, initial_state=None):
         r"""
-        Compute the first n terms of the sequence.
+        Compute the first n terms of the sequence as in the function nth_term.
 
         EXAMPLES::
 
@@ -1251,7 +1268,7 @@ class SequenceLinearScheme:
         """
         # TODO if speed is ever a concern, this could be easily sped up by not
         # computing each value individually
-        return [self.nth_term(k) for k in range(n)]
+        return [self.nth_term(k, initial_state) for k in range(n)]
 
     def simplify(self):
         r"""
