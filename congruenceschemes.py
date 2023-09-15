@@ -10,6 +10,12 @@ AUTHOR:
 
 - Armin Straub (2021/10): Initial implementation
 
+CHANGES:
+
+- 2023/09: Adjusted code to work with SageMath 10.1 (the implementation of
+  PolyDict changed considerably), breaking compatibility with earlier versions
+  of SageMath.
+
 CONTRIBUTIONS:
 
 - The underlying ideas and algorithms for computing congruence schemes were
@@ -25,7 +31,7 @@ CONTRIBUTIONS:
 """
 
 #############################################################################
-#  Copyright (C) 2021 Armin Straub, http://arminstraub.com                  #
+#  Copyright (C) 2021-2023 Armin Straub, http://arminstraub.com             #
 #                                                                           #
 #  Distributed under the terms of the GNU General Public License (GPL)      #
 #  either version 2, or (at your option) any later version                  #
@@ -48,7 +54,8 @@ from sage.rings.polynomial.polydict import PolyDict
 def polydict_from(poly, n=None, R=None):
     r"""
     Creates a Laurent polynomial (as a PolyDict instance) from an ordinary
-    (Laurent) polynomial or constant.
+    (Laurent) polynomial or constant. n is the number of variables, and R
+    the base ring. If not specified, these will be inferred from poly.
 
     EXAMPLES::
 
@@ -89,8 +96,9 @@ def polydict_from(poly, n=None, R=None):
         # we also allow poly to be a constant (e.g. used for Q=1)
         coeffs = {n*(0,): R(poly)}
 
-    return PolyDict(coeffs, zero=R(0),
-            remove_zero=True, force_int_exponents=False, force_etuples=True)
+    polydict = PolyDict(coeffs)
+    polydict.remove_zeros()
+    return polydict
 
 
 def polydict_cancel(poly, d, R):
@@ -104,8 +112,7 @@ def polydict_cancel(poly, d, R):
         PolyDict with representation {(0, 1): 2, (1, 0): 1}
     """
     new_poly = {e: R(ZZ(poly[e])/ZZ(d)) for e in poly.dict()}
-    return PolyDict(new_poly, zero=R(0),
-            remove_zero=False, force_int_exponents=False, force_etuples=False)
+    return PolyDict(new_poly)
 
 
 def polydict_symmetries(poly):
@@ -231,8 +238,7 @@ def polydict_reduce_exponents(poly, r):
                 if (ri == 0 and ei == 0) or (ri > 0 and ei % ri == 0))
         if len(e_reduced) == len(e):
             new_poly[e_reduced] = poly[e]
-    return PolyDict(new_poly, zero=0,
-            remove_zero=False, force_int_exponents=False, force_etuples=True)
+    return PolyDict(new_poly)
 
 
 class ConstantTermBase:
@@ -289,17 +295,21 @@ class ConstantTermBase:
             PolyDict with representation {(0,): 1}
             sage: ConstantTermBase(polydict_from(1/x+1+x)).pow(1)
             PolyDict with representation {(-1,): 1, (0,): 1, (1,): 1}
+            sage: ConstantTermBase(polydict_from(1/x+1+x)).pow(4)
+            PolyDict with representation {(-4,): 1, (-2,): 2, (0,): 3, (2,): 2, (4,): 1}
         """
         if i == 0:
-            return self._poly**0
-            # return polydict_from(1, self._n, self._R)
+            return polydict_from(1, self._n, self._R)
         else:
-            return self.pow(i-1) * self._poly
+            poly = self.pow(i-1) * self._poly
+            poly.remove_zeros()
+            return poly
 
     @cached_method
     def pow_p(self):
         r"""
-        Computes the p-th power in the form (poly, d).
+        Computes the p-th power in the form (poly, d) where the d indicates
+        that poly(x^d) was reduced to poly(x).
 
         EXAMPLES::
 
@@ -336,11 +346,12 @@ class ConstantTermBase:
             [[2, (2,)]]
             sage: ConstantTermBase(polydict_from(1+4*x^3+x^6)).power_reductions()  #TODO: output could be compactified; worth it?
             [[2, (6,)], [1, (6,)]]
-            sage: ConstantTermBase(polydict_from(1/x+1+x)).power_reductions()
+            sage: f = polydict_from(1/x+1+x)
+            sage: ConstantTermBase(f).power_reductions()
             []
-            sage: ConstantTermBase(polydict_from(1/x+1+x)**2).power_reductions()
+            sage: ConstantTermBase(f*f).power_reductions()
             [[2, (2,)]]
-            sage: ConstantTermBase(polydict_from(1/x+1+x)**4).power_reductions()
+            sage: ConstantTermBase(f*f*f*f).power_reductions()
             [[2, (4,)], [1, (2,)]]
         """
         if self._power_reductions is None:
@@ -390,8 +401,9 @@ class ConstantTermBase:
 
         poly_reduced = {e: self._R(self.power_reductions_e(e)(poly[e])) for e in poly.dict()}
 
-        return PolyDict(poly_reduced, zero=self._R(0),
-                remove_zero=True, force_int_exponents=False, force_etuples=True)
+        polydict = PolyDict(poly_reduced)
+        polydict.remove_zeros()
+        return polydict
 
     def symmetries(self):
         r"""
@@ -474,8 +486,9 @@ class ConstantTermBase:
                         e[j], e[i] = ei, e[j]
             new_poly_add(e, coeff)
 
-        return PolyDict(new_poly, zero=self._R(0),
-                remove_zero=True, force_int_exponents=False, force_etuples=True)
+        polydict = PolyDict(new_poly)
+        polydict.remove_zeros()
+        return polydict
 
 
 class ConstantTerm:
@@ -495,6 +508,7 @@ class ConstantTerm:
             self._base = base
         else:
             self._base = ConstantTermBase(base)
+        poly.remove_zeros()
         self._poly = poly
 
         self._n = self._base._n
@@ -543,7 +557,13 @@ class ConstantTerm:
             sage: ConstantTerm(polydict_from(1/x+1+x), polydict_from(3+6*x)).poly_gcd()
             1
         """
-        return gcd(self._poly.coefficients())
+        d = gcd(self._poly.coefficients())
+        # the gcd can be zero if the coefficient list is empty or if all
+        # coefficients are zero; for our purposes (dividing out the gcd), this
+        # needs to be corrected to 1
+        if not d:
+            d = self._R(1)
+        return d
 
     def initial_value(self):
         r"""
@@ -605,6 +625,12 @@ class ConstantTerm:
 
         EXAMPLES::
 
+            sage: R.<x> = LaurentPolynomialRing(Zmod(3))
+            sage: ConstantTerm(polydict_from(1/x+2+x), polydict_from(1, 1, Zmod(3))).offsprings()
+            [CT[(x + 2 + x^-1)^n * (1)],
+             CT[(x + 2 + x^-1)^n * (2)],
+             CT[(x + 2 + x^-1)^n * (0)]]
+
             sage: R.<x> = LaurentPolynomialRing(Zmod(4))
             sage: ConstantTerm(polydict_from(1/x+1+x), polydict_from(1, 1, Zmod(4))).offsprings()
             [CT[(x^2 + 2*x + 3 + 2*x^-1 + x^-2)^n * (1)],
@@ -626,7 +652,8 @@ class ConstantTerm:
 
             sage: R.<x,y> = LaurentPolynomialRing(ZZ)
             sage: f = polydict_from(((1+x)*(1+y)*(1+x+y))/x/y, 2, Zmod(9))
-            sage: ConstantTerm(f, f^0).offsprings()[1].poly()
+            sage: one = polydict_from(1, 2, Zmod(9))
+            sage: ConstantTerm(f, one).offsprings()[1].poly()
             PolyDict with representation {(-1, -1): 1, (-1, 0): 1, (-1, 1): 1, (0, 0): 3, (1, -1): 1, (1, 0): 2}
         """
         # the new constant term is ct(base^(pn+j) * poly)
@@ -666,9 +693,9 @@ class ConstantTerm:
 
             sage: R.<x> = LaurentPolynomialRing(Zmod(4))
             sage: f = polydict_from(1/x+1+x)
-            sage: ConstantTerm(f^2, polydict_from(3+2*x)).reduce()
+            sage: ConstantTerm(f*f, polydict_from(3+2*x)).reduce()
             CT[(x^2 + 2*x + 3 + 2*x^-1 + x^-2)^n * (3)]
-            sage: ConstantTerm(f^2, f).reduce()
+            sage: ConstantTerm(f*f, f).reduce()
             CT[(x^2 + 2*x + 3 + 2*x^-1 + x^-2)^n * (1)]
         """
         poly = self.poly()
@@ -717,6 +744,9 @@ class ConstantTerm:
 
             sage: R.<x> = LaurentPolynomialRing(Zmod(8))
             sage: ct = ConstantTerm(polydict_from(1/x+1+x), polydict_from(2+3*x))
+            sage: ct2 = ConstantTerm(polydict_from(1/x+1+x), polydict_from(x))
+            sage: ct.subtract_off([ct2])
+            (CT[(x + 1 + x^-1)^n * (2)], {CT[(x + 1 + x^-1)^n * (x)]: 3})
         """
         if not cts:
             return (self, {})

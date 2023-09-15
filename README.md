@@ -18,6 +18,11 @@ The basic usage of this package is indicated in Section 4 of that paper.
 - As part of his 2019 master's thesis, Joel Henningsen (under the guidance of Armin Straub) implemented a subset of these algorithms in Sage.  The performance and design lessons learned from Joel's work have benefitted the present code.
 
 
+## Changes
+
+- 2023/09: Adjusted code to work with SageMath 10.1 (the implementation of PolyDict changed considerably), breaking compatibility with earlier versions of SageMath.
+
+
 ## References
 
 <a id="RY15">[RY15]</a>
@@ -35,5 +40,5 @@ A case study in meta-automation: automatic generation of congruence automata for
 <a id="S22">[S22]</a>
 Armin Straub (2022).
 On congruence schemes for constant terms and their applications.
-*Research in Number Theory*, to appear.
-[arXiv:2205.09902](https://arxiv.org/abs/2205.09902)
+*Research in Number Theory*, 8(3), #42, 1-21.
+[DOI](https://doi.org/10.1007/s40993-022-00337-6)
